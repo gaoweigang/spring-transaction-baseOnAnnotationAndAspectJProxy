@@ -1,0 +1,22 @@
+1.Spring AOP代理实现事物管理
+1.1 配置事物管理器DataSourceTransactionManager
+1.2 配置Annotation驱动<tx:annotation-driven />
+
+基于Spring Aop的事物管理的缺陷：
+1.@Transactional 注解只应用到 public 方法
+2.自调用问题：同一类中的其他没有@Transactional 注解的方法内部调用有@Transactional 注解的方法，有@Transactional 注解的方法的事务被忽略，不会发生回滚
+
+解决：
+由于基于Spring Aop的事物管理有如上两点缺陷，如有必要，可以改成基于AspectJ的事物管理，基于AspectJ的事物管理可以解决如上两个缺陷
+
+
+使用spring-aspects.jar 的aspectj, 需要指定编织时间, 使用编译时织入.
+aspectj 是静态织入的, 也就是编译期织入、类加载期织入(LTW), 编译期织入可以采用编辑器(maven, ant)等工具, 类加载器可以通过类加载器，在类字节码加载到JVM时，织入切面
+
+参考：https://www.ibm.com/developerworks/cn/java/j-master-spring-transactional-use/index.html
+https://my.oschina.net/yqz/blog/1603556
+https://blog.csdn.net/zjerryj/article/details/77133267
+https://blog.csdn.net/posse_wang/article/details/76690772
+
+Spring官方文档：
+https://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/transaction/annotation/EnableTransactionManagement.html

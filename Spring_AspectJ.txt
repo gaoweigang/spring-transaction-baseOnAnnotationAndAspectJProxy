@@ -1,0 +1,85 @@
+#使用AspectJ Compiler解决Spring @Transactional方法自调用失效,参考：https://my.oschina.net/yqz/blog/1603556
+
+If we want to use the @Transactional annotation on private methods, we cannot use Spring’s default proxy mode - it only works for public methods that are called from client code.
+For self-invoked methods we need to use AspectJ.
+如果我们想在私有方法上使用@transactional注解，我们不能使用Spring的默认代理模式——它只适用于从客户端代码调用的公共方法。对于自我调用的方法，我们需要使用AspectJ。
+
+An Example
+This may be the case e.g. when we want to save incoming data and send a letter using that data within a transaction. If saving the data fails we do not want to send the letter. If sending the letter fails we do not want to loose the data that we received. Hence, we want to save the data in a separate transaction, by annotating our saveData(..) method with @Transactional(propagation = Propagation.REQUIRES_NEW).
+举个栗子：
+有这样一种场景，例如，当我们想要保存传入的数据并在事务中使用该数据发送信函时。如果保存数据失败，我们就不希望发送这封信。如果发送信失败，我们不希望丢失我们收到的数据。因此，我们希望通过用 @Transactional(propagation = Propagation.REQUIRES_NEW)来注释我们的saveData（。。）方法，将数据保存在单独的事务中。
+
+Configuring Spring To Use AspectJ
+On a @Configuration class we just need to set the AspectJ advice mode for the transaction management configuration:
+配置Spring来使用AspectJ
+在@configuration类中，我们只需要为事务管理配置设置AspectJ通知模式
+
+@Configuration
+@ComponentScan
+@EnableTransactionManagement(mode = AdviceMode.ASPECTJ) //启用基于AspectJ的事物管理
+class ApplicationConfiguration {
+    // ...
+}
+
+Configuring Maven To Run The AspectJ Compiler
+Next we need to use the AspectJ compiler, so let’s add its needed dependencies:
+配置Maven来运行AspectJ编译器
+接下来，我们需要使用AspectJ编译器，所以让我们添加它需要的依赖项
+
+
+<dependencies>
+    <!--aspectj-->
+    <dependency>
+        <groupId>org.aspectj</groupId>
+        <artifactId>aspectjrt</artifactId>
+        <version>1.8.7</version>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-aspects</artifactId>
+        <version>4.3.13.RELEASE</version>
+    </dependency>
+</dependencies>
+
+
+The AspectJ compiler itself can then be enabled with:
+然后，AspectJ编译器自己就会使用如下配置启用
+
+<plugin>
+    <groupId>org.codehaus.mojo</groupId>
+    <artifactId>aspectj-maven-plugin</artifactId>
+    <version>1.11</version>
+    <executions>
+        <execution>
+            <goals>
+                <goal>compile</goal>
+                <!-- <goal>test-compile</goal> -->
+            </goals>
+        </execution>
+    </executions>
+    <configuration>
+        <complianceLevel>1.8</complianceLevel>
+        <forceAjcCompile>true</forceAjcCompile>
+        <weaveDirectories>
+            <weaveDirectory>${project.build.outputDirectory}</weaveDirectory>
+        </weaveDirectories>
+        <aspectLibraries>
+            <aspectLibrary>
+                <groupId>org.springframework</groupId>
+                <artifactId>spring-aspects</artifactId>
+            </aspectLibrary>
+        </aspectLibraries>
+    </configuration>
+</plugin>
+
+If we do not use <forceAjcCompile> and do not set the <weaveDirectory> AspectJ will not weave the transaction code into our generated Groovy bytecode. Instead, it will warn us with No sources found skipping aspectJ compile when Maven runs. That is as the aspectj-maven-plugin processes the src/main/java directory by default but not src/main/groovy.
+如果我们不使用<forceAjcCompile>，并且不设置<weaveDirectory>，那么AspectJ将不会把事务代码编织到我们生成的Groovy字节码中。相反，它会警告我们，当Maven运行时，没有发现跳过aspectJ编译的消息源。这是由于aspectj-maven-plugin在默认情况下处理src/main/java目录，而不是src/main/groovy
+
+How The AspectJ Generated Code Looks Like
+Just for completeness, let’s look how AspectJ has wrapped the saveData(..) method with a transaction. Using the Procyon decompiler we can see:
+AspectJ如何生成代码看起来只是为了完整性，让我们看看AspectJ如何用事务包装saveData（。。）方法。我们可以使用Procyon反编译器查看：
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public void saveData(final SomeData data) {
+    ((AbstractTransactionAspect)AnnotationTransactionAspect.aspectOf()).ajc$around$org_springframework_transaction_aspectj_AbstractTransactionAspect$1$2a73e96c((Object)this, (AroundClosure)new DataService$AjcClosure3(new Object[] { this, data }), DataService.ajc$tjp_1);
+}
